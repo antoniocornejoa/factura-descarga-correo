@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mantenedor - Centros de Gestión</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
+    .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 1.6rem; margin-bottom: 8px; color: #1a1a2e; }
+    .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95rem; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 20px; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 16px; color: #1a1a2e; }
+    .form-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .form-row input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; }
+    .form-row input[type="text"]:focus { outline: none; border-color: #4472C4; box-shadow: 0 0 0 2px rgba(68,114,196,0.2); }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #4472C4; color: #fff; }
+    .btn-primary:hover { background: #3561b0; }
+    .btn-danger { background: #e74c3c; color: #fff; padding: 6px 12px; font-size: 0.85rem; }
+    .btn-danger:hover { background: #c0392b; }
+    .btn-success { background: #27ae60; color: #fff; padding: 6px 12px; font-size: 0.85rem; }
+    .btn-success:hover { background: #219a52; }
+    .btn-secondary { background: #95a5a6; color: #fff; padding: 6px 12px; font-size: 0.85rem; }
+    .btn-secondary:hover { background: #7f8c8d; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 2px solid #e0e0e0; font-size: 0.85rem; color: #666; text-transform: uppercase; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 0.95rem; }
+    tr:hover { background: #f8f9fa; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; }
+    .badge-active { background: #d4edda; color: #155724; }
+    .badge-inactive { background: #f8d7da; color: #721c24; }
+    .actions { display: flex; gap: 6px; }
+    .empty { text-align: center; padding: 40px; color: #999; }
+    .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 6px; color: #fff; font-size: 0.9rem; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
+    .toast.show { opacity: 1; }
+    .toast-success { background: #27ae60; }
+    .toast-error { background: #e74c3c; }
+    .search-row { margin-bottom: 16px; }
+    .search-row input { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; }
+    .search-row input:focus { outline: none; border-color: #4472C4; }
+    .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 16px 20px; flex: 1; text-align: center; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; color: #4472C4; }
+    .stat-label { font-size: 0.85rem; color: #666; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Mantenedor de Centros de Gestión</h1>
+    <p class="subtitle">Configura los centros de gestión que se incluirán en el reporte de facturas pendientes</p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="totalCount">0</div>
+        <div class="stat-label">Total configurados</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="activeCount">0</div>
+        <div class="stat-label">Activos</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Agregar Centro de Gestión</h2>
+      <div class="form-row">
+        <input type="text" id="centerName" placeholder="Ej: (COLB) TALCA - PARQUE ESMERALDA..." />
+        <button class="btn btn-primary" onclick="addCenter()">Agregar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Centros Configurados</h2>
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="Buscar centro de gestión..." oninput="filterTable()" />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Centro de Gestión</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="centersTable">
+          <tr><td colspan="3" class="empty">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API = '/cost-centers';
+    let allCenters = [];
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show toast-' + type;
+      setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    async function loadCenters() {
+      try {
+        const res = await fetch(API);
+        allCenters = await res.json();
+        renderTable(allCenters);
+        document.getElementById('totalCount').textContent = allCenters.length;
+        document.getElementById('activeCount').textContent = allCenters.filter(c => c.active).length;
+      } catch (e) {
+        showToast('Error cargando centros', 'error');
+      }
+    }
+
+    function renderTable(centers) {
+      const tbody = document.getElementById('centersTable');
+      if (centers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">No hay centros configurados</td></tr>';
+        return;
+      }
+      tbody.innerHTML = centers.map(c => `
+        <tr>
+          <td>${c.name}</td>
+          <td><span class="badge ${c.active ? 'badge-active' : 'badge-inactive'}">${c.active ? 'Activo' : 'Inactivo'}</span></td>
+          <td class="actions">
+            <button class="btn ${c.active ? 'btn-secondary' : 'btn-success'}" onclick="toggleCenter(${c.id}, ${c.active})">
+              ${c.active ? 'Desactivar' : 'Activar'}
+            </button>
+            <button class="btn btn-danger" onclick="deleteCenter(${c.id}, '${c.name.replace(/'/g, "\\'")}')">Eliminar</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterTable() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allCenters.filter(c => c.name.toLowerCase().includes(q));
+      renderTable(filtered);
+    }
+
+    async function addCenter() {
+      const input = document.getElementById('centerName');
+      const name = input.value.trim();
+      if (!name) { showToast('Ingrese un nombre', 'error'); return; }
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          showToast(err.message || 'Error', 'error');
+          return;
+        }
+        input.value = '';
+        showToast('Centro agregado', 'success');
+        loadCenters();
+      } catch (e) {
+        showToast('Error agregando centro', 'error');
+      }
+    }
+
+    async function toggleCenter(id, currentActive) {
+      try {
+        await fetch(API + '/' + id, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: !currentActive })
+        });
+        showToast(currentActive ? 'Centro desactivado' : 'Centro activado', 'success');
+        loadCenters();
+      } catch (e) {
+        showToast('Error actualizando centro', 'error');
+      }
+    }
+
+    async function deleteCenter(id, name) {
+      if (!confirm('¿Eliminar "' + name + '"?')) return;
+      try {
+        await fetch(API + '/' + id, { method: 'DELETE' });
+        showToast('Centro eliminado', 'success');
+        loadCenters();
+      } catch (e) {
+        showToast('Error eliminando centro', 'error');
+      }
+    }
+
+    document.getElementById('centerName').addEventListener('keypress', e => {
+      if (e.key === 'Enter') addCenter();
+    });
+
+    loadCenters();
+  </script>
+</body>
+</html>
