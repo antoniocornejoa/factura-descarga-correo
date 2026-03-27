@@ -1,48 +1,57 @@
-import { google } from 'googleapis';
+/**
+ * Gmail Client - Version independiente (sin Replit)
+ *
+ * Usa credenciales OAuth2 de Google directamente mediante variables de entorno:
+ *   GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
+ *
+ * Para obtener estas credenciales:
+ * 1. Ve a https://console.cloud.google.com/
+ * 2. Crea un proyecto (o usa uno existente)
+ * 3. Habilita la Gmail API
+ * 4. Crea credenciales OAuth2 (tipo "Aplicacion de escritorio")
+ * 5. Usa el script scripts/get-gmail-token.mjs para obtener el refresh_token
+ */
 
-let connectionSettings: any;
+import { google } from "googleapis";
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+export async function getAccessToken(): Promise<string> {
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error(
+                "Gmail OAuth2 credentials not configured. " +
+                  "Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN environment variables. " +
+                  "Run: node scripts/get-gmail-token.mjs to obtain them.",
+              );
   }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
 
-  if (!xReplitToken) {
-    throw new Error('X-Replit-Token not found for repl/depl');
-  }
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X-Replit-Token': xReplitToken
-      }
+  const { token } = await oauth2Client.getAccessToken();
+    if (!token) {
+          throw new Error("Failed to get Gmail access token from refresh token");
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
 
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Gmail not connected');
-  }
-  return accessToken;
+  return token;
 }
 
 export async function getUncachableGmailClient() {
-  const accessToken = await getAccessToken();
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
 
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
-  });
+  if (!clientId || !clientSecret || !refreshToken) {
+        throw new Error(
+                "Gmail OAuth2 credentials not configured. " +
+                  "Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN environment variables.",
+              );
+  }
 
-  return google.gmail({ version: 'v1', auth: oauth2Client });
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  return google.gmail({ version: "v1", auth: oauth2Client });
 }
